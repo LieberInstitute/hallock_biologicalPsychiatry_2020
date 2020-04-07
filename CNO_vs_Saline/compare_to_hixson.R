@@ -1,6 +1,7 @@
 library(TeachingDemos)
 ## read in both
 hixson = read.csv("tables/hixson_biorxiv_2019_VBvsControl_parse.csv",as.is=TRUE)
+colnames(hixson)[1] = "GeneSymbol"
 hallock = read.csv("tables/exprsGenes_DESeq2_combinedCounts_CNOvsSaline.csv",as.is=TRUE, row.names=1)
 
 ## match up
