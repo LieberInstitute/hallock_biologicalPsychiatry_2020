@@ -163,7 +163,7 @@ sym = getBM(attributes = c("ensembl_gene_id","hgnc_symbol","entrezgene"),
 res$hsapien_EntrezID = sym$entrezgene[match(res$hsapien_homolog, sym$ensembl_gene_id)]
 
 ## read in dx sets
-dxSets = read.delim("../Gene_Sets/Harmonizome_CTD Gene-Disease Associations Dataset.txt",
+dxSets = read.delim("../Harmonizome_CTD Gene-Disease Associations Dataset.txt",
 	as.is=TRUE,skip=1)
 dxSets$isExpMouse = dxSets$GeneID %in% res$hsapien_EntrezID
 
