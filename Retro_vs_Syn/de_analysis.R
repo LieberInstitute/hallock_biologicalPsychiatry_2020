@@ -304,7 +304,3 @@ dxSetGsea = sapply(dxSetsList, function(x) {
 dxSetStats$gsea_pvalue_projectorEnrich = dxSetGsea[rownames(dxSetStats)]
 	
 write.csv(dxSetStats, "tables/Harmonizome_CST_SynRetroCre_effects_final.csv")
-
-
-sum(p.adjust(dxSetStats$gsea_pvalue_projectorEnrich[
-	
