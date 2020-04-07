@@ -112,9 +112,13 @@ dev.off()
 
 sigGeneList = split(sigGene$EntrezID, sign(sigGene$logFC))
 sigGeneList = lapply(sigGeneList, function(x) as.character(x[!is.na(x)]))
-
+lengths(sigGeneList)
+#  -1   1 
+# 681 615 
 geneUniverse = as.character(outGene$EntrezID)
 geneUniverse = geneUniverse[!is.na(geneUniverse)]
+length(geneUniverse)
+# 13602
 
 go <- compareCluster(sigGeneList, fun = "enrichGO",
                 universe = geneUniverse, OrgDb = org.Mm.eg.db,
@@ -194,6 +198,14 @@ univ = univ[!duplicated(univ$hsapien_EntrezID),]
 univ$Enrich_Retro = univ$adj.P.Val <0.05 & univ$logFC > 0
 univ$Enrich_Syn = univ$adj.P.Val <0.05 & univ$logFC < 0
 
+## numbers
+nrow(univ)
+# [1] 12653
+sum(univ$Enrich_Retro)
+# [1] 601
+sum(univ$Enrich_Syn)
+# [1] 661
+
 ## syn enriched
 tabList_syn = lapply(dxSetsList, function(x) {
 	table(Set = factor(univ$hsapien_EntrezID %in% x$GeneID, c(FALSE, TRUE)),
@@ -240,7 +252,7 @@ dxSetStats$ID = dxSets$Mesh.or.Omim.ID[match(rownames(dxSetStats), dxSets$Diseas
 
 univ_proj = univ[univ$P.Value < 0.05,]
 nrow(univ_proj)
-
+# [1] 2853
 ## syn enriched
 tabList_syn_proj = lapply(dxSetsList, function(x) {
 	table(Set = factor(univ_proj$hsapien_EntrezID %in% x$GeneID, c(FALSE, TRUE)),
@@ -279,5 +291,20 @@ dxSetStats$Pval_retro_neuronBG = dxSetStats_proj$Pval_retro
 dxSetStats$OR_syn_neuronBG = dxSetStats_proj$OR_syn
 dxSetStats$Pval_syn_neuronBG = dxSetStats_proj$Pval_syn
 
+#####################################################
+### another analysis with gsea, for upregulation
+
+dxSetGsea = sapply(dxSetsList, function(x) {
+	geneSetTest(
+		index = univ$hsapien_EntrezID %in% x$GeneID,
+		statistics = univ$t,
+		alternative = "up"
+	)
+})
+dxSetStats$gsea_pvalue_projectorEnrich = dxSetGsea[rownames(dxSetStats)]
+	
 write.csv(dxSetStats, "tables/Harmonizome_CST_SynRetroCre_effects_final.csv")
 
+
+sum(p.adjust(dxSetStats$gsea_pvalue_projectorEnrich[
+	
