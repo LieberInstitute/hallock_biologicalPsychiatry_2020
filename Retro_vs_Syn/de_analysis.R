@@ -9,7 +9,6 @@ library(limma)
 library(jaffelab)
 library(sva)
 library(RColorBrewer)
-library(DESeq2)
 library(TeachingDemos) # for shadow text
 library(readxl)
 library(biomaRt)

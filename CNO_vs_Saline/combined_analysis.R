@@ -17,49 +17,6 @@ dir.create("tables")
 dir.create("plots")
 
 # ## load counts
-# load("hiseq_data/rse_gene_hc_pfc_excitation_Henry_HiSeq_n6.Rdata")
-# rse_gene_hi = rse_gene
-
-# ## load counts
-# load("nextseq_data/rse_gene_hc_pfc_excitation_Henry_n6.Rdata")
-# rse_gene_next = rse_gene
-
-# # get phenotype data
-# pd = read.csv("hc-pfc excitation_pheno.csv",as.is=TRUE)
-# pd$Condition =  ifelse(pd$Phenotype == 0 , "CNO", "Saline")
-# pd$Condition = factor(pd$Condition, levels = c("Saline", "CNO"))
-# pd$SampleID = paste0("Keri_", pd$Sample.Number, "_", ss(pd$Label,"_"))
-# rownames(pd) = pd$Label
-
-# ## fix up columns of rse
-# colnames(rse_gene_hi) = pd$Label[match(colnames(rse_gene_hi), pd$SampleID)]
-# rse_gene_hi = rse_gene_hi[,colnames(rse_gene_next)]
-
-# ## combine counts
-# rse_gene = rse_gene_hi
-# rowData(rse_gene)$meanExprs = NULL
-# assays(rse_gene)$counts = assays(rse_gene_hi)$counts + assays(rse_gene_next)$counts
-
-# ## combine metrics
-# for(i in c(2,5:14)) {
-	# ll = split(cbind(colData(rse_gene_hi)[,i], colData(rse_gene_next)[,i]),colnames(rse_gene))
-	# colData(rse_gene)[,i] = NumericList(ll)
-# }
-# for(i in c(3:4)) {
-	# ll = split(cbind(colData(rse_gene_hi)[,i], colData(rse_gene_next)[,i]),colnames(rse_gene))
-	# colData(rse_gene)[,i] = CharacterList(ll)
-# }
-
-# ## combine metrics
-# rse_gene$ERCCsumLogErr = mapply(function(r, n) {
-        # sum(r * n)/sum(n)
-    # }, rse_gene$ERCCsumLogErr, rse_gene$numReads)
-# rse_gene = merge_rse_metrics(rse_gene)
-
-# ## add pheno
-# colData(rse_gene) = cbind(pd[colnames(rse_gene),-1], colData(rse_gene))
-# rse_gene$SAMPLE_ID = NULL
-# save(rse_gene, file = "rse_gene_hc_pfc_excitation_Henry_n6_annotated_merged.Rdata")
 load("rse_gene_hc_pfc_excitation_Henry_n6_annotated_merged.Rdata")
 
 ####################
@@ -119,7 +76,7 @@ res = res[res$isExprs,]
 
 ## sort by p-value
 res = res[order(res$pvalue),c(7,1:6,8:9)]
-write.csv(res, "tables/exprsGenes_DESeq2_combinedCounts.csv")
+write.csv(res, "tables/exprsGenes_DESeq2_combinedCounts_CNOvsSaline.csv")
 
 ##################
 ##### plots ######
@@ -155,27 +112,24 @@ geneUniverse = geneUniverse[!is.na(geneUniverse)]
 go <- compareCluster(sigGeneList, fun = "enrichGO",
                 universe = geneUniverse, OrgDb = org.Mm.eg.db,
                 ont = "ALL", pAdjustMethod = "BH",
-                pvalueCutoff  = 0.1, qvalueCutoff  = 0.05,
+                pvalueCutoff  = 1, qvalueCutoff  = 1,
 				readable= TRUE)
-save(go, file = "rdas/hyper_GO_runs_geneLevel_DESeq2.rda")
+save(go, file = "rdas/hyper_GO_runs_geneLevel_DESeq2_CNOvsSaline.rda")
 goDf = as.data.frame(go)
 goDf = goDf[order(goDf$pvalue),]
 rownames(goDf) = NULL
 goDf[1:30,-11]
-write.csv(goDf, "tables/GO_geneLevel_DESeq2_fdr05.csv",
+write.csv(goDf, "tables/GO_geneLevel_DESeq2_fdr05_CNOvsSaline.csv",
 	row.names=FALSE)
 	
-
-## example GO plots
-goOut = read.csv("tables/GO_geneLevel_DESeq2_fdr05.csv",as.is=TRUE)
 
 setsToPlot = c("GO:0001933", "GO:0006469", "GO:0009991",
        "GO:0031668", "GO:0071496", "GO:0005667",
        "GO:0007616", "GO:0007613", "GO:0050890", "GO:0099550", "GO:0007611")
 
-goSub = goOut[match(setsToPlot,goOut$ID)]
+goSub = goDf[match(setsToPlot,goDf$ID),]
 
-pdf("plots/go_figure_barplot.pdf",h=4,w=9,useDingbats=FALSE)
+pdf("plots/go_figure_barplot_CNOvsSaline.pdf",h=4,w=9,useDingbats=FALSE)
 par(mar=c(5,30,2,2),cex.axis=1.2,cex.lab=1.5)
 barplot(-log10(goSub$qvalue),width=0.5,
 	names = goSub$Description,horiz=TRUE,
@@ -183,74 +137,6 @@ barplot(-log10(goSub$qvalue),width=0.5,
 abline(v=-log10(0.05), col="blue")
 dev.off()
 
-#################
-##limma
-rse_gene_filter = rse_gene[rowMeans(getRPKM(rse_gene, "Length")) > 0.1,]
-mod = model.matrix(~Condition + totalAssignedGene,
-	data = colData(rse_gene_filter))
-	
-dge = DGEList(counts = assays(rse_gene_filter)$counts, 
-	genes = rowData(rse_gene_filter))
-dge = calcNormFactors(dge)
-
-## mean-variance
-vGene = voom(dge,mod,plot=TRUE)
-fitGene = lmFit(vGene, mod)
-ebGene = eBayes(fitGene)
-outGene = topTable(ebGene, coef=2, sort="none", n = nrow(dge))
-sum(outGene$adj.P.Val < 0.2)
-sum(outGene$P.Value < 0.001)
-
-resCompare = res[rownames(outGene),]
-plot(resCompare$log2FoldChange, outGene$logFC)
-plot(resCompare$stat, outGene$t)
-### top genes
-sigGene = topTable(ebGene, coef=2, n = nrow(dge), 
-	adjust.method="BH", p.value = 0.3)
-sigGene = sigGene[sigGene$P.Value < 0.005,c(2,5, 8,10:13,3,1,4,6,9)]
-
-
-	
-## write out				
-goOut = as.data.frame(go)
-goSig = goOut[goOut$p.adjust < 0.05,]
-colnames(goSig)[1] = "Direction"
-goSig = goSig[order(goSig$p.adjust),]
-save(go, goOut,goSig, file = "tables/cnoVsSaline_GO_FDR05_p005Input.rda")
-write.csv(goSig, file = "tables/cnoVsSaline_GO_FDR05_p005Input.csv",row.names=FALSE)
-
-
-##########
-## gsea ## 
-geneStat = outGene$t
-names(geneStat) = outGene$EntrezID
-geneStat = sort(geneStat, decreasing=TRUE)
-geneStat = geneStat[!is.na(names(geneStat))]
-
-goGse = gseGO(geneStat, OrgDb = org.Mm.eg.db, ont = "ALL",
-	nPerm = 100000, minGSSize    = 20, maxGSSize    = 500,
-    pvalueCutoff = 0.05, verbose=TRUE)
-goGseDf = DataFrame(as.data.frame(goGse))
-goGseDf$core_enrichment = CharacterList(strsplit(goGseDf$core_enrichment, "/"))
-goGseDf$core_enrichment = endoapply(goGseDf$core_enrichment, function(x) {
-	outGene$Symbol[match(x, outGene$EntrezID)]
-})
-goGseDf$leading_edge = CharacterList(strsplit(goGseDf$leading_edge, ", "))
-
-keggGse = gseKEGG(geneStat, organism = "mmu",
-	nPerm = 100000, minGSSize    = 20, maxGSSize  = 500,
-    pvalueCutoff = 0.05, verbose=TRUE)
-keggGseDf = DataFrame(as.data.frame(keggGse))
-keggGseDf$core_enrichment = CharacterList(strsplit(keggGseDf$core_enrichment, "/"))
-keggGseDf$core_enrichment = endoapply(keggGseDf$core_enrichment, function(x) {
-	outGene$Symbol[match(x, outGene$EntrezID)]
-})
-keggGseDf$leading_edge = CharacterList(strsplit(keggGseDf$leading_edge, ", "))
-save( goGse, goGseDf, keggGse, keggGseDf, file = "rdas/gsea_runs_geneLevel_limma_sva.rda")
-
-## check sets
-keggGseDf$Description[keggGseDf$NES > 0]
-goGseDf$Description[goGseDf$NES > 0]
 
 ###################
 ## dx gene sets ###
@@ -277,36 +163,66 @@ sym = getBM(attributes = c("ensembl_gene_id","hgnc_symbol","entrezgene"),
 res$hsapien_EntrezID = sym$entrezgene[match(res$hsapien_homolog, sym$ensembl_gene_id)]
 
 ## read in dx sets
-dxSets = read.delim("/dcl01/lieber/ajaffe/lab/cst_trap_seq/gene_sets/Harmonizome_CTD Gene-Disease Associations Dataset.txt",
+dxSets = read.delim("../Gene_Sets/Harmonizome_CTD Gene-Disease Associations Dataset.txt",
 	as.is=TRUE,skip=1)
 dxSets$isExpMouse = dxSets$GeneID %in% res$hsapien_EntrezID
-dxSets$Enrich_Mouse = dxSets$GeneID %in% res$hsapien_EntrezID[res$padj <0.05]
+
+dxSets$Enrich_CNO = dxSets$GeneID %in% res$hsapien_EntrezID[
+	res$padj <0.05 & res$log2FoldChange > 0]
+dxSets$Enrich_Saline = dxSets$GeneID %in% res$hsapien_EntrezID[
+	res$padj <0.05 & res$log2FoldChange < 0]
 	
 ## split
 dxSetsList = split(dxSets, dxSets$Disease)
-dxSetsList = dxSetsList[sapply(dxSetsList, function(x) sum(x$Enrich_Mouse) > 0)]
-length(dxSetsList)
+dxSetsList = dxSetsList[sapply(dxSetsList, nrow) > 1]
 
+## get universe
 univ = res[order(res$pvalue),]
 univ = univ[!is.na(univ$hsapien_EntrezID),]
 univ = univ[!duplicated(univ$hsapien_EntrezID),]
-univ$Geno = univ$padj < 0.05 
+univ$Enrich_CNO = univ$padj <0.05 & univ$log2FoldChange > 0
+univ$Enrich_Saline = univ$padj <0.05 & univ$log2FoldChange < 0
 
-dxStats = do.call("rbind", mclapply(dxSetsList, function(x) {
-	x = x[x$isExpMouse,]
-	inSet = univ$hsapien_EntrezID %in% x$GeneID
-	tt = table(inSet, univ$Geno)
-	data.frame(OR = getOR(tt), p.value = chisq.test(tt)$p.value)
-},mc.cores=4))
+## Saline enriched
+tabList_saline = lapply(dxSetsList, function(x) {
+	table(Set = factor(univ$hsapien_EntrezID %in% x$GeneID, c(FALSE, TRUE)),
+            DE = factor(univ$Enrich_Saline, c(FALSE, TRUE)))
+})
+enrichList_saline = lapply(tabList_saline, fisher.test)
+dxSetStats_saline= data.frame(
+        OR_saline = sapply(enrichList_saline, "[[", "estimate"),
+        Pval_saline = sapply(enrichList_saline, "[[", "p.value"),
+		NumSig_saline = sapply(tabList_saline, function(x) x[2,2])
+)
+rownames(dxSetStats_saline) = gsub(".odds ratio", "", rownames(dxSetStats_saline))
+dxSetStats_saline$adjPval_saline = NA
+dxSetStats_saline$adjPval_saline[dxSetStats_saline$NumSig_saline > 0] = p.adjust(
+	dxSetStats_saline$Pval_saline[dxSetStats_saline$NumSig_saline > 0], "fdr")
 
-dxStats$adj.P.Val = p.adjust(dxStats$p.value)
-dxStats = dxStats[order(dxStats$p.value),]
-dxStats$setSize = sapply(dxSetsList,nrow)[rownames(dxStats)]
-dxStats$numSig= sapply(dxSetsList,function(x) sum(x$Enrich_Mouse))[rownames(dxStats)]
-dxStats$ID = dxSets$Mesh.or.Omim.ID[match(rownames(dxStats), dxSets$Disease)]
+## CNO enriched
+tabList_cno = lapply(dxSetsList, function(x) {
+	table(Set = factor(univ$hsapien_EntrezID %in% x$GeneID, c(FALSE, TRUE)),
+            DE = factor(univ$Enrich_CNO, c(FALSE, TRUE)))
+})
+enrichList_cno = lapply(tabList_cno, fisher.test)
+dxSetStats_cno= data.frame(
+        OR_cno = sapply(enrichList_cno, "[[", "estimate"),
+        Pval_cno = sapply(enrichList_cno, "[[", "p.value"),
+		NumSig_cno = sapply(tabList_cno, function(x) x[2,2])
+)
+rownames(dxSetStats_cno) = gsub(".odds ratio", "", rownames(dxSetStats_cno))
+dxSetStats_cno$adjPval_cno = NA
+dxSetStats_cno$adjPval_cno[dxSetStats_cno$NumSig_cno > 0] = p.adjust(
+	dxSetStats_cno$Pval_cno[dxSetStats_cno$NumSig_cno > 0], "fdr")
 
-dxStats$sigGenes = sapply(dxSetsList,
-	function(x) paste0(x$GeneSym[x$Enrich_Mouse], collapse=";"))[rownames(dxStats)]
+## bind together
+dxSetStats = cbind(dxSetStats_cno, dxSetStats_saline)
+dxSetStats = dxSetStats[dxSetStats$NumSig_cno > 0 | dxSetStats$NumSig_saline > 0 ,]
+## order by retro
+dxSetStats = dxSetStats[order(dxSetStats$Pval_cno),]
 
-write.csv(dxStats, "tables/Harmonizome_CST_SynRetroCre_effects.csv")
+dxSetStats$setSize = sapply(dxSetsList,nrow)[rownames(dxSetStats)]
+dxSetStats$ID = dxSets$Mesh.or.Omim.ID[match(rownames(dxSetStats), dxSets$Disease)]
+
+write.csv(dxSetStats, "tables/Harmonizome_CST_CNOvsSaline_effects.csv")
 
