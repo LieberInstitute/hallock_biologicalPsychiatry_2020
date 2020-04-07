@@ -105,9 +105,13 @@ dev.off()
 sig = res[res$padj < 0.05,]
 sigGeneList = split(sig$EntrezID, sign(sig$log2FoldChange))
 sigGeneList = lapply(sigGeneList, function(x) as.character(x[!is.na(x)]))
-
+lengths(sigGeneList)
+#  -1   1 
+# 242 602
 geneUniverse = as.character(res$EntrezID)
 geneUniverse = geneUniverse[!is.na(geneUniverse)]
+length(geneUniverse)
+# [1] 14916
 
 go <- compareCluster(sigGeneList, fun = "enrichGO",
                 universe = geneUniverse, OrgDb = org.Mm.eg.db,
